@@ -10,7 +10,10 @@ const LOG_PREFIX = '[export-tag-overrides]';
  */
 const WRAPPED_COMMANDS = {
   createStoreFunction: { context: 'DEFAULT', owner: '@ohif/extension-default' },
-  storeSegmentation: { context: 'SEGMENTATION', owner: '@ohif/extension-cornerstone-dicom-seg' },
+  storeSegmentation: {
+    context: 'SEGMENTATION',
+    owner: '@ohif/extension-cornerstone-dicom-seg',
+  },
 } as const;
 
 type WrappedCommandName = keyof typeof WRAPPED_COMMANDS;
@@ -82,9 +85,15 @@ const getCommandsModule = ({
    * surfaced as a UI warning, since the Export click would otherwise silently
    * do nothing.
    */
-  const getOriginal = (name: WrappedCommandName): CommandDefinition | undefined => {
+  const getOriginal = (
+    name: WrappedCommandName
+  ): CommandDefinition | undefined => {
     if (!originals[name]) {
-      const current = commandsManager.getCommand(name, WRAPPED_COMMANDS[name].context);
+      const current = commandsManager.getCommand(
+        name,
+        WRAPPED_COMMANDS[name].context
+      );
+
       if (current?.commandFn && current.commandFn !== actions[name]) {
         originals[name] = current;
       }
@@ -149,7 +158,9 @@ const getCommandsModule = ({
       return async (dicom: unknown, ...rest: unknown[]) => {
         const instances = Array.isArray(dicom) ? dicom : [dicom];
         for (const instance of instances) {
-          const appliedRuleIds = applyExportOverrides(instance as Record<string, unknown>);
+          const appliedRuleIds = applyExportOverrides(
+            instance as Record<string, unknown>
+          );
           if (appliedRuleIds.length > 0) {
             console.log(`${LOG_PREFIX} applied rule(s): ${appliedRuleIds.join(', ')}`);
           }

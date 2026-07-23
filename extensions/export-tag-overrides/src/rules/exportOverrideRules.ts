@@ -9,7 +9,10 @@
  * To support a new patient/tag in the future, add another entry to
  * `exportOverrideRules` below. No code changes are required.
  */
-import type { PersonNameComponents, NaturalizedPersonName } from '../utils/personName';
+import type {
+  PersonNameComponents,
+  NaturalizedPersonName,
+} from '../utils/personName';
 
 /**
  * Match criteria for a rule. Every provided field must match for the rule to
@@ -32,7 +35,10 @@ export interface ExportRuleMatch {
  * Person Name (PN) tags a string is treated as the Alphabetic component, and a
  * `PersonNameComponents` object is serialized to `Family^Given^Patronymic^...`.
  */
-export type OverrideValue = string | PersonNameComponents | NaturalizedPersonName;
+export type OverrideValue =
+  | string
+  | PersonNameComponents
+  | NaturalizedPersonName;
 
 export interface ExportOverrideRule {
   /** Stable identifier, for logging/debugging. */
@@ -53,7 +59,7 @@ export const exportOverrideRules: ExportOverrideRule[] = [
   {
     id: 'fortest-2021-04-28-performing-physician',
     description:
-      'Patient FORTEST, Study Date 28-Apr-2021: set Performing Physician Name (0008,1050) to John Doe.',
+      'Patient FORTEST, Study Date 28-Apr-2021: set Performing Physician Name (0008,1050) to Ivanov Ivan.',
     match: {
       patientIdOrName: 'FORTEST',
       studyDate: '20210428',
@@ -61,9 +67,9 @@ export const exportOverrideRules: ExportOverrideRule[] = [
     overrides: {
       // (0008,1050) PerformingPhysicianName. Family^Given (patronymic omitted).
       PerformingPhysicianName: {
-        family: 'Doe',
-        given: 'John',
-        // patronymic: 'Ivanovich', // <-- add when a middle/patronymic is required
+        family: 'Ivanov',
+        given: 'Ivan',
+        patronymic: 'Ivanovich',
       },
     },
   },

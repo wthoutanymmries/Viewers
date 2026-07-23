@@ -44,14 +44,15 @@ function validateRule(rule: ExportOverrideRule): void {
   const unknownMatchKeys = matchKeys.filter(key => !isKnownMatchKey(key));
   if (unknownMatchKeys.length > 0) {
     console.warn(
-      `${LOG_PREFIX} Rule "${rule.id}": unknown match key(s) ${unknownMatchKeys.join(', ')} — ` +
-        `did you mean one of: ${KNOWN_MATCH_KEYS.join(', ')}?`
+      `${LOG_PREFIX} Rule "${rule.id}": unknown match key(s) `
+      + `${unknownMatchKeys.join(', ')} — `
+      + `did you mean one of: ${KNOWN_MATCH_KEYS.join(', ')}?`
     );
   }
   if (!matchKeys.some(isKnownMatchKey)) {
     console.warn(
       `${LOG_PREFIX} Rule "${rule.id}": match block has no recognized criteria — ` +
-        `this rule will never apply.`
+      `this rule will never apply.`
     );
   }
 
@@ -79,7 +80,8 @@ function normalizePn(value: string): string {
 }
 
 /** Plain-string read (LO/DA VR values in a naturalized dataset). */
-const asString = (value: unknown): string => (typeof value === 'string' ? value : '');
+const asString =
+  (value: unknown): string => (typeof value === 'string' ? value : '');
 
 /** True if every provided criterion in `match` matches the dataset. */
 export function datasetMatchesRule(
@@ -95,7 +97,10 @@ export function datasetMatchesRule(
   const patientName = pnToComparableString(dataset.PatientName);
   const studyDate = asString(dataset.StudyDate);
 
-  if (match.patientId !== undefined && normalize(patientId) !== normalize(match.patientId)) {
+  if (
+    match.patientId !== undefined
+    && normalize(patientId) !== normalize(match.patientId)
+  ) {
     return false;
   }
 
@@ -115,7 +120,10 @@ export function datasetMatchesRule(
     }
   }
 
-  if (match.studyDate !== undefined && normalize(studyDate) !== normalize(match.studyDate)) {
+  if (
+    match.studyDate !== undefined
+    && normalize(studyDate) !== normalize(match.studyDate)
+  ) {
     return false;
   }
 
@@ -123,13 +131,18 @@ export function datasetMatchesRule(
 }
 
 /** Apply a single rule's overrides onto the dataset, coercing PN tags. */
-function applyRuleOverrides(dataset: Record<string, unknown>, rule: ExportOverrideRule): void {
+function applyRuleOverrides(
+  dataset: Record<string, unknown>,
+  rule: ExportOverrideRule
+): void {
   Object.entries(rule.overrides).forEach(([keyword, value]) => {
     if (isPnKeyword(keyword)) {
       dataset[keyword] = toNaturalizedPersonName(value);
-    } else if (typeof value === 'string') {
+    }
+    else if (typeof value === 'string') {
       dataset[keyword] = value;
-    } else {
+    }
+    else {
       // Non-PN keyword given a component/naturalized object — skip rather than
       // write a malformed value, and warn so the misconfiguration is visible.
       console.warn(

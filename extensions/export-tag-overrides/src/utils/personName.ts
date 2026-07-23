@@ -51,7 +51,9 @@ const COMPONENT_KEYS = [
 ] as const satisfies readonly (keyof PersonNameComponents)[];
 
 /** Type guard: is this a PersonNameComponents object (vs. a raw string / naturalized PN)? */
-export function isPersonNameComponents(value: unknown): value is PersonNameComponents {
+export function isPersonNameComponents(
+  value: unknown
+): value is PersonNameComponents {
   if (typeof value !== 'object' || value === null) {
     return false;
   }
@@ -89,7 +91,10 @@ export function pnToComparableString(value: unknown): string {
   if (Array.isArray(value)) {
     return pnToComparableString(value[0]);
   }
-  if (typeof value === 'object' && 'Alphabetic' in (value as Record<string, unknown>)) {
+  if (
+    typeof value === 'object'
+    && 'Alphabetic' in (value as Record<string, unknown>)
+  ) {
     const alphabetic = (value as NaturalizedPersonName).Alphabetic;
     return typeof alphabetic === 'string' ? alphabetic : '';
   }
