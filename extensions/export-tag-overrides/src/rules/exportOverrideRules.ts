@@ -40,22 +40,14 @@ export interface ExportOverrideRule {
   /** Human-readable description of intent. */
   description?: string;
   match: ExportRuleMatch;
-  /** DICOM keyword -> override value (e.g. `PerformingPhysicianName`). */
+  /**
+   * DICOM keyword -> override value (e.g. `PerformingPhysicianName`).
+   * Keywords are validated against the dcmjs data dictionary at apply time;
+   * Person Name (PN VR) keywords are detected via the dictionary and coerced
+   * into the naturalized `{ Alphabetic }` form the export path expects.
+   */
   overrides: Record<string, OverrideValue>;
 }
-
-/**
- * DICOM keywords that are Person Name (PN) VR. Overrides targeting these are
- * coerced into the naturalized `{ Alphabetic }` form the export path expects.
- */
-export const PN_KEYWORDS: ReadonlySet<string> = new Set([
-  'PerformingPhysicianName',
-  'ReferringPhysicianName',
-  'OperatorsName',
-  'PatientName',
-  'NameOfPhysiciansReadingStudy',
-  'RequestingPhysician',
-]);
 
 export const exportOverrideRules: ExportOverrideRule[] = [
   {

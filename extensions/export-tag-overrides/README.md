@@ -88,8 +88,10 @@ person-name comparisons also ignore trailing empty PN components, so
 | `patientIdOrName` | either of above  | matches if EITHER equals                |
 | `studyDate`       | (0008,0020)      | `YYYYMMDD`                              |
 
-Person-Name-VR tags are listed in `PN_KEYWORDS` in the same file; add to that set
-if you need to override another PN tag.
+Override keywords are validated against the dcmjs DICOM data dictionary — a
+typo'd keyword logs a warning instead of silently dropping the tag. Person Name
+(PN VR) keywords are detected via the dictionary automatically, so any PN tag
+works without registering it anywhere.
 
 ## Installation
 

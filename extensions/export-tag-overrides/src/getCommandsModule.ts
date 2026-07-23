@@ -39,8 +39,8 @@ const getCommandsModule = ({
   // Capture the original definitions BEFORE ours overwrite them. getCommand
   // returns the live definition object; registerCommand replaces the map entry
   // with a new object, so these references keep pointing at the originals.
-  const originalCreateStoreFunction = commandsManager.getCommand('createStoreFunction', 'DEFAULT');
-  const originalStoreSegmentation = commandsManager.getCommand('storeSegmentation', 'SEGMENTATION');
+  let originalCreateStoreFunction = commandsManager.getCommand('createStoreFunction', 'DEFAULT');
+  let originalStoreSegmentation = commandsManager.getCommand('storeSegmentation', 'SEGMENTATION');
 
   if (!originalCreateStoreFunction?.commandFn) {
     console.warn(
@@ -56,6 +56,17 @@ const getCommandsModule = ({
   }
 
   /**
+   * Fail-open fallback: if an original was not captured at registration time
+   * (unexpected load order), retry at call time. The self-check prevents
+   * delegating to our own wrapper (infinite recursion) — after our
+   * registration, the live definition's commandFn is one of `actions.*`.
+   */
+  const lazyRecapture = (commandName: string, contextName: string, selfFn: unknown) => {
+    const current = commandsManager.getCommand(commandName, contextName);
+    return current?.commandFn && current.commandFn !== selfFn ? current : undefined;
+  };
+
+  /**
    * Set while a wrapped `storeSegmentation` call is in flight. The dialog is
    * modal, so no other export can start while it is open.
    */
@@ -64,9 +75,17 @@ const getCommandsModule = ({
   const actions = {
     storeSegmentation: async (args: { modality?: string } = {}) => {
       if (!originalStoreSegmentation?.commandFn) {
+        originalStoreSegmentation = lazyRecapture(
+          'storeSegmentation',
+          'SEGMENTATION',
+          actions.storeSegmentation
+        );
+      }
+      if (!originalStoreSegmentation?.commandFn) {
+        console.warn(`${LOG_PREFIX} storeSegmentation has no original to delegate to`);
         return undefined;
       }
-
+``
       activeStoreSegmentation = { modality: args?.modality ?? 'SEG' };
       try {
         return await originalStoreSegmentation.commandFn({
@@ -80,6 +99,14 @@ const getCommandsModule = ({
 
     createStoreFunction: (args: { dataSource?: string } = {}) => {
       if (!originalCreateStoreFunction?.commandFn) {
+        originalCreateStoreFunction = lazyRecapture(
+          'createStoreFunction',
+          'DEFAULT',
+          actions.createStoreFunction
+        );
+      }
+      if (!originalCreateStoreFunction?.commandFn) {
+        console.warn(`${LOG_PREFIX} createStoreFunction has no original to delegate to`);
         return undefined;
       }
 
