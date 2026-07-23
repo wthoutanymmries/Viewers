@@ -35,7 +35,23 @@ const LOG_PREFIX = '[export-tag-overrides]';
  */
 const getCommandsModule = ({
   commandsManager,
+  servicesManager,
 }: Types.Extensions.ExtensionParams): Types.Extensions.CommandsModule => {
+  /**
+   * Surface a fail-safe as a visible warning, not just a console line: when a
+   * wrapped command has no original to delegate to, the Export click would
+   * otherwise silently do nothing.
+   */
+  const notifyMissingOriginal = (commandName: string) => {
+    const message = `Export unavailable: the "${commandName}" command could not be reached. Check the extension load order.`;
+    console.warn(`${LOG_PREFIX} ${commandName} has no original to delegate to`);
+    servicesManager?.services?.uiNotificationService?.show({
+      title: 'Export Tag Overrides',
+      message,
+      type: 'warning',
+    });
+  };
+
   // Capture the original definitions BEFORE ours overwrite them. getCommand
   // returns the live definition object; registerCommand replaces the map entry
   // with a new object, so these references keep pointing at the originals.
@@ -82,10 +98,10 @@ const getCommandsModule = ({
         );
       }
       if (!originalStoreSegmentation?.commandFn) {
-        console.warn(`${LOG_PREFIX} storeSegmentation has no original to delegate to`);
+        notifyMissingOriginal('storeSegmentation');
         return undefined;
       }
-``
+
       activeStoreSegmentation = { modality: args?.modality ?? 'SEG' };
       try {
         return await originalStoreSegmentation.commandFn({
@@ -106,7 +122,7 @@ const getCommandsModule = ({
         );
       }
       if (!originalCreateStoreFunction?.commandFn) {
-        console.warn(`${LOG_PREFIX} createStoreFunction has no original to delegate to`);
+        notifyMissingOriginal('createStoreFunction');
         return undefined;
       }
 
