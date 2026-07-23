@@ -18,6 +18,14 @@ function normalize(value: string): string {
   return value.trim().toLowerCase();
 }
 
+/**
+ * Normalize a Person Name for comparison: trim, drop trailing empty PN
+ * components (`FORTEST^^^^` ≡ `FORTEST^` ≡ `FORTEST`), and lowercase.
+ */
+function normalizePn(value: string): string {
+  return value.trim().replace(/\^+$/, '').toLowerCase();
+}
+
 /** Read PatientID (LO VR, plain string) from a naturalized dataset. */
 function getPatientId(dataset: Record<string, unknown>): string {
   const value = dataset.PatientID;
@@ -48,13 +56,18 @@ export function datasetMatchesRule(
     return false;
   }
 
-  if (match.patientName !== undefined && normalize(patientName) !== normalize(match.patientName)) {
+  if (
+    match.patientName !== undefined &&
+    normalizePn(patientName) !== normalizePn(match.patientName)
+  ) {
     return false;
   }
 
   if (match.patientIdOrName !== undefined) {
-    const target = normalize(match.patientIdOrName);
-    if (normalize(patientId) !== target && normalize(patientName) !== target) {
+    if (
+      normalize(patientId) !== normalize(match.patientIdOrName) &&
+      normalizePn(patientName) !== normalizePn(match.patientIdOrName)
+    ) {
       return false;
     }
   }

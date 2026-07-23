@@ -23,6 +23,7 @@
       "@ohif/extension-measurement-tracking": ["./extensions/measurement-tracking/src"],
       "@ohif/extension-cornerstone-dicom-sr": ["./extensions/cornerstone-dicom-sr/src"],
       "@ohif/extension-cornerstone-dicom-seg": ["./extensions/cornerstone-dicom-seg/src"],
+    "@ohif/extension-export-tag-overrides": ["./extensions/export-tag-overrides/src"],
       "@ohif/extension-ultrasound-pleura-bline": ["./extensions/usAnnotation/src"],
       "@ohif/mode-ultrasound-pleura-bline": ["./modes/usAnnotation/src"],
       "@ohif/extension-cornerstone": ["./extensions/cornerstone/src"],

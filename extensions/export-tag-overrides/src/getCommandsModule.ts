@@ -1,80 +1,84 @@
 import { Types } from '@ohif/core';
 import { applyExportOverrides } from './utils/applyExportOverrides';
-import { pnToComparableString } from './utils/personName';
 
 const LOG_PREFIX = '[export-tag-overrides]';
 
 /**
- * Applies rule-based DICOM tag overrides to exported segmentations (and any
- * other exported DICOM) by wrapping the shared `createStoreFunction` command.
+ * Applies rule-based DICOM tag overrides to segmentations exported via the
+ * "Store Segmentation" dialog's Download button — and ONLY that path.
  *
- * Why `createStoreFunction` (and not `downloadSegmentation`)?
- * Every export path funnels through `createStoreFunction` (registered by
- * `@ohif/extension-default` in the `DEFAULT` context) to obtain a `storeFn`,
- * then calls `storeFn(dataset)`:
- *   - "Manage Current Segmentation → Export → DICOM SEG" runs `storeSegmentation`
- *     (which resolves `createStoreFunction` with the data source picked in the
- *     Store dialog — including its "Download" button).
- *   - the standalone `downloadSegmentation` command uses `createStoreFunction`
- *     with `dataSource: 'download'`.
- * Wrapping `createStoreFunction` therefore intercepts the dataset at the single
- * serialization boundary common to all of them — no need to touch
- * cornerstone-dicom-seg or reimplement `storeSegmentation`.
+ * Target UI flow (the only one that triggers overrides):
+ *   Segmentation panel → "Manage Current Segmentation" → Export → DICOM SEG
+ *     → `storeSegmentation` command (modality 'SEG', `SEGMENTATION` context)
+ *     → "Store Segmentation" dialog → Download button (`dataSource: 'download'`)
+ *     → `createStoreFunction` (`DEFAULT` context) → storeFn(dataset)
  *
- * This extension must be registered AFTER `@ohif/extension-default` so that this
- * definition wins the same-context (`DEFAULT`) registration. Load order is
- * guaranteed because extension-default is a global/default extension registered
- * at app init, while this extension is registered later, on Segmentation-mode
- * entry.
+ * Explicitly excluded:
+ *   - the dialog's Save button (server store; `dataSource` = a named source),
+ *   - the same dialog opened via Export → DICOM RTSS (modality 'RTSTRUCT'),
+ *   - the standalone `downloadSegmentation` command (also `dataSource:
+ *     'download'`, which is why `dataSource` alone cannot discriminate),
+ *   - DICOM SR / measurement exports.
+ *
+ * How the scoping works: we wrap BOTH commands. The `storeSegmentation` wrapper
+ * (same-name registration into the `SEGMENTATION` context; later registration
+ * wins) records the requested modality for the duration of the call. The
+ * `createStoreFunction` wrapper (same-name registration into `DEFAULT`) applies
+ * overrides only when a `storeSegmentation` call with modality 'SEG' is in
+ * flight AND the dialog resolved to `dataSource: 'download'`.
+ *
+ * Load order: `@ohif/extension-default` (owner of `createStoreFunction`) is a
+ * global extension registered at app init; `cornerstone-dicom-seg` (owner of
+ * `storeSegmentation`) is listed before this extension in the segmentation
+ * mode's dependency map. Mode-dependency extensions register in map order on
+ * mode entry, so both originals exist when this factory runs.
  */
 const getCommandsModule = ({
   commandsManager,
 }: Types.Extensions.ExtensionParams): Types.Extensions.CommandsModule => {
-  console.log(`${LOG_PREFIX} commands module initializing (wrapping createStoreFunction)`);
-
-  // Capture the original createStoreFunction BEFORE our definition overwrites it
-  // in the DEFAULT context. getCommand returns the live definition object, so
-  // this reference keeps pointing at the original even after we register ours.
+  // Capture the original definitions BEFORE ours overwrite them. getCommand
+  // returns the live definition object; registerCommand replaces the map entry
+  // with a new object, so these references keep pointing at the originals.
   const originalCreateStoreFunction = commandsManager.getCommand('createStoreFunction', 'DEFAULT');
+  const originalStoreSegmentation = commandsManager.getCommand('storeSegmentation', 'SEGMENTATION');
 
   if (!originalCreateStoreFunction?.commandFn) {
     console.warn(
-      `${LOG_PREFIX} original createStoreFunction not found in DEFAULT context — overrides will NOT be applied. ` +
-        `Is this extension registered after @ohif/extension-default?`
+      `${LOG_PREFIX} original createStoreFunction not found in DEFAULT context — ` +
+        `overrides will NOT be applied. Is @ohif/extension-default registered first?`
     );
-  } else {
-    console.log(`${LOG_PREFIX} captured original createStoreFunction from DEFAULT context`);
+  }
+  if (!originalStoreSegmentation?.commandFn) {
+    console.warn(
+      `${LOG_PREFIX} original storeSegmentation not found in SEGMENTATION context — ` +
+        `overrides will NOT be applied. Is @ohif/extension-cornerstone-dicom-seg registered first?`
+    );
   }
 
-  /** Apply override rules to a single naturalized instance, with logging. */
-  const overrideInstance = (instance: Record<string, unknown>, index: number): void => {
-    const patientName = pnToComparableString(instance?.PatientName);
-    const patientId = typeof instance?.PatientID === 'string' ? instance.PatientID : '';
-    const studyDate = typeof instance?.StudyDate === 'string' ? instance.StudyDate : '';
-    const modality = typeof instance?.Modality === 'string' ? instance.Modality : '';
-
-    console.log(
-      `${LOG_PREFIX} instance[${index}] Modality=${modality} PatientName="${patientName}" ` +
-        `PatientID="${patientId}" StudyDate="${studyDate}"`
-    );
-
-    const appliedRuleIds = applyExportOverrides(instance);
-
-    if (appliedRuleIds.length > 0) {
-      console.log(
-        `${LOG_PREFIX} instance[${index}] applied rule(s): ${appliedRuleIds.join(', ')} → ` +
-          `PerformingPhysicianName=`,
-        instance.PerformingPhysicianName
-      );
-    } else {
-      console.log(`${LOG_PREFIX} instance[${index}] no rule matched — dataset left unchanged`);
-    }
-  };
+  /**
+   * Set while a wrapped `storeSegmentation` call is in flight. The dialog is
+   * modal, so no other export can start while it is open.
+   */
+  let activeStoreSegmentation: { modality: string } | null = null;
 
   const actions = {
-    createStoreFunction: (args: { dataSource?: string } = {}) => {
-      console.log(`${LOG_PREFIX} createStoreFunction called; dataSource=`, args?.dataSource);
+    storeSegmentation: async (args: { modality?: string } = {}) => {
+      if (!originalStoreSegmentation?.commandFn) {
+        return undefined;
+      }
 
+      activeStoreSegmentation = { modality: args?.modality ?? 'SEG' };
+      try {
+        return await originalStoreSegmentation.commandFn({
+          ...(originalStoreSegmentation.options || {}),
+          ...args,
+        });
+      } finally {
+        activeStoreSegmentation = null;
+      }
+    },
+
+    createStoreFunction: (args: { dataSource?: string } = {}) => {
       if (!originalCreateStoreFunction?.commandFn) {
         return undefined;
       }
@@ -86,33 +90,44 @@ const getCommandsModule = ({
         ...args,
       });
 
+      // `null` is the original's normal "no valid store" answer — pass through.
       if (typeof storeFn !== 'function') {
-        console.warn(`${LOG_PREFIX} original createStoreFunction returned no store fn; passing through`);
+        return storeFn;
+      }
+
+      // Scope decision, made synchronously inside the storeSegmentation call:
+      // SEG export dialog resolved to its Download button.
+      const shouldApplyOverrides =
+        activeStoreSegmentation?.modality === 'SEG' && args?.dataSource === 'download';
+
+      if (!shouldApplyOverrides) {
         return storeFn;
       }
 
       // Return a wrapper that mutates the dataset(s) just before the original
-      // store function serializes/sends them.
+      // store function serializes them for download.
       return async (dicom: unknown, ...rest: unknown[]) => {
         const instances = Array.isArray(dicom) ? dicom : [dicom];
-        console.log(`${LOG_PREFIX} storeFn invoked with ${instances.length} instance(s)`);
-        instances.forEach((instance, index) =>
-          overrideInstance(instance as Record<string, unknown>, index)
-        );
+        instances.forEach(instance => {
+          const appliedRuleIds = applyExportOverrides(instance as Record<string, unknown>);
+          if (appliedRuleIds.length > 0) {
+            console.log(`${LOG_PREFIX} applied rule(s): ${appliedRuleIds.join(', ')}`);
+          }
+        });
         return (storeFn as (d: unknown, ...r: unknown[]) => unknown)(dicom, ...rest);
       };
     },
   };
 
   const definitions = {
-    createStoreFunction: actions.createStoreFunction,
+    // Same-name registration into each original's context so ours wins.
+    createStoreFunction: { commandFn: actions.createStoreFunction, context: 'DEFAULT' },
+    storeSegmentation: { commandFn: actions.storeSegmentation, context: 'SEGMENTATION' },
   };
 
   return {
     actions,
     definitions,
-    // Register into the DEFAULT context so this overrides extension-default's
-    // createStoreFunction of the same name.
     defaultContext: 'DEFAULT',
   };
 };
