@@ -66,6 +66,18 @@ export const segmentationRoute = {
   layoutInstance: segmentationLayout,
 };
 
+/**
+ * Extend the basic mode's extension dependencies with the export-tag-overrides
+ * extension, scoped to this mode so the override only loads in the Segmentation
+ * workflow. The extension wraps the shared `createStoreFunction` command (owned
+ * by the always-registered `@ohif/extension-default`), so it just needs to load
+ * on mode entry — which is always after app-init global extensions.
+ */
+export const extendedExtensionDependencies = {
+  ...extensionDependencies,
+  '@ohif/extension-export-tag-overrides': '^3.0.0',
+};
+
 export const modeInstance = {
   id,
   routeName: 'segmentation',
@@ -111,7 +123,7 @@ export const modeInstance = {
   isValidMode,
   nonModeModalities: ['SM', 'ECG', 'OT', 'DOC'],
   routes: [segmentationRoute],
-  extensions: extensionDependencies,
+  extensions: extendedExtensionDependencies,
   // Prefer the grid layout hanging protocol when applicable.
   hangingProtocol: ['@ohif/mnGrid'],
   sopClassHandlers: [ohif.sopClassHandler, segmentation.sopClassHandler, dicomRT.sopClassHandler],
@@ -136,7 +148,7 @@ const mode = {
   id,
   modeFactory,
   modeInstance,
-  extensionDependencies,
+  extensionDependencies: extendedExtensionDependencies,
   customizations,
 };
 
