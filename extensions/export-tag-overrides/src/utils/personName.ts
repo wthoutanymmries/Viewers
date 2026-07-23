@@ -29,29 +29,33 @@ export interface NaturalizedPersonName {
  * Trailing empty components are trimmed (e.g. `Doe^John` rather than `Doe^John^^^`).
  */
 export function componentsToPnString(components: PersonNameComponents): string {
-  const ordered = [
+  return [
     components.family ?? '',
     components.given ?? '',
     components.patronymic ?? '',
     components.prefix ?? '',
     components.suffix ?? '',
-  ];
-
-  // Drop trailing empty components so we emit the shortest valid representation.
-  while (ordered.length > 0 && ordered[ordered.length - 1] === '') {
-    ordered.pop();
-  }
-
-  return ordered.join('^');
+  ]
+    .join('^')
+    // Drop trailing empty components so we emit the shortest valid representation.
+    .replace(/\^+$/, '');
 }
+
+/** Component keys — compiler-checked against `PersonNameComponents`. */
+const COMPONENT_KEYS = [
+  'family',
+  'given',
+  'patronymic',
+  'prefix',
+  'suffix',
+] as const satisfies readonly (keyof PersonNameComponents)[];
 
 /** Type guard: is this a PersonNameComponents object (vs. a raw string / naturalized PN)? */
 export function isPersonNameComponents(value: unknown): value is PersonNameComponents {
   if (typeof value !== 'object' || value === null) {
     return false;
   }
-  const keys = ['family', 'given', 'patronymic', 'prefix', 'suffix'];
-  return keys.some(key => key in (value as Record<string, unknown>));
+  return COMPONENT_KEYS.some(key => key in value);
 }
 
 /**

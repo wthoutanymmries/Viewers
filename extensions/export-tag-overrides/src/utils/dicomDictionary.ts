@@ -6,11 +6,6 @@ import dcmjs from 'dcmjs';
 
 const { nameMap } = dcmjs.data.DicomMetaDictionary;
 
-/** VR for a DICOM keyword (e.g. 'PerformingPhysicianName' → 'PN'), or undefined. */
-export function getKeywordVr(keyword: string): string | undefined {
-  return nameMap?.[keyword]?.vr;
-}
-
 /** True when the keyword exists in the DICOM data dictionary. */
 export function isKnownKeyword(keyword: string): boolean {
   return Boolean(nameMap?.[keyword]);
@@ -18,5 +13,5 @@ export function isKnownKeyword(keyword: string): boolean {
 
 /** True when the keyword is a Person Name (PN VR) attribute. */
 export function isPnKeyword(keyword: string): boolean {
-  return getKeywordVr(keyword) === 'PN';
+  return nameMap?.[keyword]?.vr === 'PN';
 }

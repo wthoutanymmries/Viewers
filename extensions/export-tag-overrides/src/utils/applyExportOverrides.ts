@@ -15,13 +15,16 @@ import { isKnownKeyword, isPnKeyword } from './dicomDictionary';
 
 const LOG_PREFIX = '[export-tag-overrides]';
 
-/** Recognized `match` criteria keys — kept in sync with `ExportRuleMatch`. */
-const KNOWN_MATCH_KEYS: ReadonlySet<string> = new Set([
+/** Recognized `match` criteria keys — compiler-checked against `ExportRuleMatch`. */
+const KNOWN_MATCH_KEYS = [
   'patientId',
   'patientName',
   'patientIdOrName',
   'studyDate',
-]);
+] as const satisfies readonly (keyof ExportRuleMatch)[];
+
+const isKnownMatchKey = (key: string): key is keyof ExportRuleMatch =>
+  (KNOWN_MATCH_KEYS as readonly string[]).includes(key);
 
 /** Rule ids already validated, so misconfiguration warnings fire once per rule. */
 const validatedRuleIds = new Set<string>();
@@ -38,14 +41,14 @@ function validateRule(rule: ExportOverrideRule): void {
   validatedRuleIds.add(rule.id);
 
   const matchKeys = Object.keys(rule.match ?? {});
-  const unknownMatchKeys = matchKeys.filter(key => !KNOWN_MATCH_KEYS.has(key));
+  const unknownMatchKeys = matchKeys.filter(key => !isKnownMatchKey(key));
   if (unknownMatchKeys.length > 0) {
     console.warn(
       `${LOG_PREFIX} Rule "${rule.id}": unknown match key(s) ${unknownMatchKeys.join(', ')} — ` +
-        `did you mean one of: ${[...KNOWN_MATCH_KEYS].join(', ')}?`
+        `did you mean one of: ${KNOWN_MATCH_KEYS.join(', ')}?`
     );
   }
-  if (!matchKeys.some(key => KNOWN_MATCH_KEYS.has(key))) {
+  if (!matchKeys.some(isKnownMatchKey)) {
     console.warn(
       `${LOG_PREFIX} Rule "${rule.id}": match block has no recognized criteria — ` +
         `this rule will never apply.`
@@ -75,31 +78,22 @@ function normalizePn(value: string): string {
   return value.trim().replace(/\^+$/, '').toLowerCase();
 }
 
-/** Read PatientID (LO VR, plain string) from a naturalized dataset. */
-function getPatientId(dataset: Record<string, unknown>): string {
-  const value = dataset.PatientID;
-  return typeof value === 'string' ? value : '';
-}
-
-/** Read StudyDate (DA VR, plain string) from a naturalized dataset. */
-function getStudyDate(dataset: Record<string, unknown>): string {
-  const value = dataset.StudyDate;
-  return typeof value === 'string' ? value : '';
-}
-
-/** Read PatientName (PN VR) as a comparable Alphabetic string. */
-function getPatientName(dataset: Record<string, unknown>): string {
-  return pnToComparableString(dataset.PatientName);
-}
+/** Plain-string read (LO/DA VR values in a naturalized dataset). */
+const asString = (value: unknown): string => (typeof value === 'string' ? value : '');
 
 /** True if every provided criterion in `match` matches the dataset. */
 export function datasetMatchesRule(
   dataset: Record<string, unknown>,
   match: ExportRuleMatch
 ): boolean {
-  const patientId = getPatientId(dataset);
-  const patientName = getPatientName(dataset);
-  const studyDate = getStudyDate(dataset);
+  // A match block with no criteria never matches (avoids applying to everything).
+  if (!KNOWN_MATCH_KEYS.some(key => match[key] !== undefined)) {
+    return false;
+  }
+
+  const patientId = asString(dataset.PatientID);
+  const patientName = pnToComparableString(dataset.PatientName);
+  const studyDate = asString(dataset.StudyDate);
 
   if (match.patientId !== undefined && normalize(patientId) !== normalize(match.patientId)) {
     return false;
@@ -125,14 +119,7 @@ export function datasetMatchesRule(
     return false;
   }
 
-  // A match block with no criteria never matches (avoids applying to everything).
-  const hasAnyCriterion =
-    match.patientId !== undefined ||
-    match.patientName !== undefined ||
-    match.patientIdOrName !== undefined ||
-    match.studyDate !== undefined;
-
-  return hasAnyCriterion;
+  return true;
 }
 
 /** Apply a single rule's overrides onto the dataset, coercing PN tags. */
